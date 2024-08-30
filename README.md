@@ -1,0 +1,1 @@
+Replace your Tome IDs in the script with yours and then scan, once done drag and drop index.html in your browser, click for file to upload and then upload that journal.txt and then just search up what you need.
