@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Information Search</title>
+    <style>
+        /* Dark Theme Styling */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #1e1e1e;
+            color: #ddd;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin: 20px;
+            color: #ffffff;
+        }
+
+        /* Search Container Styling */
+        .search-container {
+            margin: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #searchBar {
+            padding: 10px;
+            width: 300px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            margin-right: 10px;
+            background-color: #2e2e2e;
+            color: #fff;
+        }
+
+        /* Button Styling */
+        .button-container button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .button-container button:hover {
+            background-color: #0056b3;
+        }
+
+        input[type="file"] {
+            margin-right: 10px;
+            color: #fff;
+        }
+
+        /* Table Styling */
+        table {
+            width: 90%;
+            max-width: 800px;
+            margin-top: 20px;
+            border-collapse: collapse;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+            background-color: #2e2e2e;
+            color: #ddd;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #555;
+        }
+
+        th {
+            background-color: #444;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        th:hover {
+            background-color: #333;
+        }
+
+        tr:nth-child(even) {
+            background-color: #333;
+        }
+
+        tr:hover {
+            background-color: #444;
+        }
+
+        a {
+            color: #00aaff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Hide description items table by default */
+        #descriptionItemsTable {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Vendor Information Search</h1>
+    <div class="search-container">
+        <input type="text" id="searchBar" placeholder="Search for vendors, items, or prices..." onkeyup="searchFunction()">
+    </div>
+
+    <div class="button-container">
+        <input type="file" id="fileInput" accept=".txt">
+        <button onclick="showMainDeals()">Main Deals</button>
+        <button onclick="show999Deals()">999 Deals</button>
+        <button onclick="toggleDescriptionItems()">Description Items</button>
+        <button onclick="resetTable()">Reset</button>
+    </div>
+
+    <!-- Main Table for Regular Items -->
+    <table id="vendorTable">
+        <thead>
+            <tr>
+                <th>Location</th>
+                <th>Vendor Name</th>
+                <th>Item Name</th>
+                <th onclick="sortTableByQuantity()">Quantity</th>
+                <th onclick="sortTableByPrice()">Price</th>
+                <th onclick="sortTableByPricePerUnit()">Price Per Unit</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Rows will be dynamically added here -->
+        </tbody>
+    </table>
+
+    <!-- Table for Items with Descriptions -->
+    <table id="descriptionItemsTable">
+        <thead>
+            <tr>
+                <th>Location</th>
+                <th>Vendor Name</th>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Price Per Unit</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Rows will be dynamically added here -->
+        </tbody>
+    </table>
+
+    <script>
+        let sortAscendingPrice = true; // Flag for sorting price
+        let sortAscendingPricePerUnit = true; // Flag for sorting price per unit
+        let sortAscendingQuantity = true; // Flag for sorting quantity
+        let currentVendor = ''; // Track current vendor across lines
+        let showingDescriptions = false; // Track whether the description table is shown
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            loadEntries(); // Load entries from localStorage on page load
+        });
+
+        function searchFunction() {
+            const input = document.getElementById('searchBar').value.toUpperCase();
+            const table = document.getElementById('vendorTable');
+            const rows = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < rows.length; i++) {
+                let cells = rows[i].getElementsByTagName('td');
+                let match = false;
+                for (let j = 0; j < cells.length; j++) {
+                    if (cells[j].innerHTML.toUpperCase().indexOf(input) > -1) {
+                        match = true;
+                        break;
+                    }
+                }
+                rows[i].style.display = match ? '' : 'none';
+            }
+        }
+
+        function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file first.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                let content = event.target.result;
+                
+                // Pre-process the text to remove unwanted phrases
+                content = preprocessContent(content);
+                
+                parseFileContent(content);
+                sortTableByPrice(); // Automatically sort prices in ascending order after uploading
+                saveEntries(); // Save entries to localStorage after uploading
+            };
+            reader.onerror = function(event) {
+                console.error('Error reading file:', event);
+                alert('Error reading file!');
+            };
+            reader.readAsText(file);
+        }
+
+        function preprocessContent(content) {
+            // Remove specific unwanted phrases
+            const unwantedPhrases = [
+                '\\(double-click to research\\)',
+                "\\(used to increase a player's skill cap for a skill by 1\\)"
+            ];
+
+            unwantedPhrases.forEach(phrase => {
+                const regex = new RegExp(phrase, 'gi');
+                content = content.replace(regex, '');
+            });
+
+            return content;
+        }
+
+        function parseFileContent(content) {
+            const tableBody = document.getElementById('vendorTable').getElementsByTagName('tbody')[0];
+            const descriptionTableBody = document.getElementById('descriptionItemsTable').getElementsByTagName('tbody')[0];
+            const lines = content.split('\n');
+            let currentLocation = '';
+
+            for (const line of lines) {
+                // Extract the location
+                if (line.includes('System: Current location is')) {
+                    const locationMatch = line.match(/Current location is \(([\d, ]+)\)/);
+                    if (locationMatch) {
+                        currentLocation = locationMatch[1].trim();
+                    }
+                }
+
+                // Extract the vendor
+                if (line.includes('Razor: Target:')) {
+                    const vendorMatch = line.match(/Razor: Target: (.*)/);
+                    if (vendorMatch) {
+                        currentVendor = vendorMatch[1].trim();
+                    }
+                } 
+                
+                // Extract the item, price, and quantity
+                else if (line.includes('[Razor]: Price:')) {
+                    const priceRegex = /\[(.*?)\].*\[Razor\]: Price: (\d{1,3}(?:,\d{3})*) (.*?)(?: : (\d+))?\s*(\[[^\]]*\])?\s*(\([^\)]*\))?$/;
+                    const priceMatch = line.match(priceRegex);
+
+                    if (priceMatch && currentVendor) {
+                        const totalPrice = parseInt(priceMatch[2].replace(/,/g, '')); // Group 2: Convert total price to a number
+                        let itemName = priceMatch[3].trim(); // Group 3: Item name
+                        const quantity = priceMatch[4] ? parseInt(priceMatch[4]) : 1; // Group 4: Quantity (default to 1 if not specified)
+                        
+                        // Combine item name with any bracketed or parenthesized parts
+                        if (priceMatch[5]) itemName += ` ${priceMatch[5].trim()}`;
+                        if (priceMatch[6]) itemName += ` ${priceMatch[6].trim()}`;
+                        
+                        const pricePerUnit = totalPrice / quantity; // Calculate price per unit
+
+                        const isDescriptionItem = itemName.toLowerCase().includes("description:");
+                        const targetTableBody = isDescriptionItem ? descriptionTableBody : tableBody;
+
+                        const row = targetTableBody.insertRow();
+                        const locationCell = row.insertCell(0);
+                        
+                        if (currentLocation) {
+                            const coords = currentLocation.split(',').map(coord => coord.trim());
+                            const locationUrl = `https://www.exploreoutlands.com/#pos:${coords[0]},${coords[1]},${coords[2]}`;
+                            locationCell.innerHTML = `<a href="${locationUrl}" target="_blank">${currentLocation}</a>`;
+                        } else {
+                            locationCell.textContent = 'Unknown Location';
+                        }
+                        
+                        row.insertCell(1).textContent = currentVendor;
+                        row.insertCell(2).textContent = itemName;
+                        row.insertCell(3).textContent = quantity; // Display quantity
+                        row.insertCell(4).textContent = totalPrice.toLocaleString(); // Format number with commas
+                        row.insertCell(5).textContent = pricePerUnit.toFixed(2); // Format price per unit to 2 decimal places
+                    }
+                }
+            }
+        }
+
+        function showMainDeals() {
+            const mainTable = document.getElementById('vendorTable');
+            const descriptionTable = document.getElementById('descriptionItemsTable');
+
+            mainTable.style.display = 'table';
+            descriptionTable.style.display = 'none';
+            showingDescriptions = false;
+        }
+
+        function toggleDescriptionItems() {
+            const mainTable = document.getElementById('vendorTable');
+            const descriptionTable = document.getElementById('descriptionItemsTable');
+            
+            if (showingDescriptions) {
+                // Hide description items, show main items
+                descriptionTable.style.display = 'none';
+                mainTable.style.display = 'table';
+                showingDescriptions = false;
+            } else {
+                // Show description items, hide main items
+                mainTable.style.display = 'none';
+                descriptionTable.style.display = 'table';
+                showingDescriptions = true;
+            }
+        }
+
+        function resetTable() {
+            const tableBody = document.getElementById('vendorTable').getElementsByTagName('tbody')[0];
+            const descriptionTableBody = document.getElementById('descriptionItemsTable').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = ''; // Clear all rows
+            descriptionTableBody.innerHTML = ''; // Clear description items
+            localStorage.removeItem('vendorEntries'); // Clear saved entries
+        }
+
+        function show999Deals() {
+            const mainTable = document.getElementById('vendorTable');
+            const descriptionTable = document.getElementById('descriptionItemsTable');
+            const rows = mainTable.getElementsByTagName('tr');
+
+            // Hide description items and show main deals
+            descriptionTable.style.display = 'none';
+            mainTable.style.display = 'table';
+            showingDescriptions = false;
+
+            for (let i = 1; i < rows.length; i++) {
+                const price = parseFloat(rows[i].cells[4].textContent.replace(/,/g, ''));
+                rows[i].style.display = (price === 999) ? '' : 'none';
+            }
+        }
+
+        function sortTableByPrice() {
+            const table = document.getElementById('vendorTable');
+            const tbody = table.getElementsByTagName('tbody')[0];
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+            rows.sort((a, b) => {
+                const priceA = parseFloat(a.cells[4].textContent.replace(/,/g, ''));
+                const priceB = parseFloat(b.cells[4].textContent.replace(/,/g, ''));
+
+                return sortAscendingPrice ? priceA - priceB : priceB - priceA;
+            });
+
+            sortAscendingPrice = !sortAscendingPrice; // Toggle the sorting order for next click
+
+            // Append sorted rows back to the table body
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function sortTableByPricePerUnit() {
+            const table = document.getElementById('vendorTable');
+            const tbody = table.getElementsByTagName('tbody')[0];
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+            rows.sort((a, b) => {
+                const pricePerUnitA = parseFloat(a.cells[5].textContent);
+                const pricePerUnitB = parseFloat(b.cells[5].textContent);
+
+                return sortAscendingPricePerUnit ? pricePerUnitA - pricePerUnitB : pricePerUnitB - pricePerUnitA;
+            });
+
+            sortAscendingPricePerUnit = !sortAscendingPricePerUnit; // Toggle the sorting order for next click
+
+            // Append sorted rows back to the table body
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function sortTableByQuantity() {
+            const table = document.getElementById('vendorTable');
+            const tbody = table.getElementsByTagName('tbody')[0];
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+            rows.sort((a, b) => {
+                const quantityA = parseInt(a.cells[3].textContent);
+                const quantityB = parseInt(b.cells[3].textContent);
+
+                return sortAscendingQuantity ? quantityA - quantityB : quantityB - quantityA;
+            });
+
+            sortAscendingQuantity = !sortAscendingQuantity; // Toggle the sorting order for next click
+
+            // Append sorted rows back to the table body
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function saveEntries() {
+            const tableBody = document.getElementById('vendorTable').getElementsByTagName('tbody')[0];
+            const rows = Array.from(tableBody.getElementsByTagName('tr'));
+
+            const entries = rows.map(row => {
+                const location = row.cells[0].textContent;
+                const vendor = row.cells[1].textContent;
+                const itemName = row.cells[2].textContent;
+                const quantity = row.cells[3].textContent;
+                const price = row.cells[4].textContent;
+                const pricePerUnit = row.cells[5].textContent;
+
+                return { location, vendor, itemName, quantity, price, pricePerUnit };
+            });
+
+            localStorage.setItem('vendorEntries', JSON.stringify(entries));
+        }
+
+        function loadEntries() {
+            const savedEntries = localStorage.getItem('vendorEntries');
+            if (savedEntries) {
+                const entries = JSON.parse(savedEntries);
+                const tableBody = document.getElementById('vendorTable').getElementsByTagName('tbody')[0];
+
+                entries.forEach(entry => {
+                    const row = tableBody.insertRow();
+                    const locationCell = row.insertCell(0);
+                    locationCell.innerHTML = `<a href="https://www.exploreoutlands.com/#pos:${entry.location.replace(/ /g, '')}" target="_blank">${entry.location}</a>`;
+                    row.insertCell(1).textContent = entry.vendor;
+                    row.insertCell(2).textContent = entry.itemName;
+                    row.insertCell(3).textContent = entry.quantity;
+                    row.insertCell(4).textContent = entry.price;
+                    row.insertCell(5).textContent = entry.pricePerUnit;
+                });
+
+                sortTableByPrice(); // Sort entries by price on load
+            }
+        }
+    </script>
+</body>
+</html>
